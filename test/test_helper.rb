@@ -7,4 +7,5 @@ $LOAD_PATH.unshift(File.join(File.dirname(__FILE__), '..', 'ext', 'bert', 'c'))
 
 load 'bert.rb'
 
-puts "Using #{BERT::Decode.impl} implementation."
+puts "Using Decode #{BERT::Decode.impl} implementation."
+puts "Using Encode #{BERT::Encode.impl} implementation."

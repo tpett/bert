@@ -4,6 +4,10 @@ module BERT
 
     attr_accessor :out
 
+    def self.impl
+      'Ruby'
+    end
+
     def initialize(out)
       self.out = out
     end
