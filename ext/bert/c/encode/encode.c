@@ -1,12 +1,21 @@
 #include "encode.h"
 
-// FBuffer implementation code
+// FBuffer implementation
 
 static FBuffer *fbuffer_alloc() {
   FBuffer *fb = ALLOC(FBuffer);
   memset((void *) fb, 0, sizeof(FBuffer));
   fb->initial_length = FBUFFER_INITIAL_LENGTH;
   return fb;
+}
+
+static void fbuffer_free(FBuffer *fb) {
+  if (fb->ptr) ruby_xfree(fb->ptr);
+  ruby_xfree(fb);
+}
+
+static void fbuffer_clear(FBuffer *fb) {
+  fb->len = 0;
 }
 
 static void fbuffer_inc_capa(FBuffer *fb, unsigned long requested) {
@@ -29,25 +38,23 @@ static void fbuffer_inc_capa(FBuffer *fb, unsigned long requested) {
 static void fbuffer_append(FBuffer *fb, const char *newstr, unsigned long len) {
   if(len > 0) {
     fbuffer_inc_capa(fb, len);
+
     int i;
     for(i = 0; i < len; i++) {
       *(fb->ptr + fb->len + i) = *(newstr + i);
     }
+
     fb->len += len;
   }
 }
 
-static FBuffer *fbuffer_alloc_with_length(unsigned long initial_length);
-static void fbuffer_free(FBuffer *fb) {
-  // Plug memory leak
-}
-static void fbuffer_free_only_buffer(FBuffer *fb);
-
-static void fbuffer_clear(FBuffer *fb) {
-  fb->len = 0;
+static void fbuffer_append_char(FBuffer *fb, char newchr) {
+  fbuffer_inc_capa(fb, 1);
+  *(fb->ptr + fb->len) = newchr;
+  fb->len++;
 }
 
-void fbuffer_append_number(FBuffer *fb, long number, short int length) {
+static void fbuffer_append_number(FBuffer *fb, long number, short int length) {
   char output[length];
   char *input = (char*) &number;
   int i;
@@ -67,30 +74,28 @@ static void fbuffer_append_short(FBuffer *fb, short int number) {
   fbuffer_append_number(fb, number, 2);
 }
 
-static void fbuffer_append_char(FBuffer *fb, char newchr) {
-  fbuffer_inc_capa(fb, 1);
-  *(fb->ptr + fb->len) = newchr;
-  fb->len++;
-}
-
+// Convert buffer to Ruby string
 static VALUE fbuffer_to_s(FBuffer *fb) {
   return rb_str_new(fb->ptr, fb->len);
 }
 
-// BERT Encoding code
 
-static void p(VALUE val) {
-  rb_funcall(rb_mKernel, rb_intern("p"), 1, val);
-}
+//
+// BERT Encoding Implementation
+//
 
 static void fail(VALUE rObject) {
   rb_raise(rb_eStandardError, "BERT: Failed to encode object");
 }
 
-
-static void write_1(FBuffer *fb, char out) {
+static void write_1(FBuffer *fb, unsigned char out) {
   fbuffer_append_char(fb, out);
 }
+
+
+//
+// Binary (strings) and ATOMs
+//
 
 static void write_string(FBuffer *fb, VALUE rString) {
   fbuffer_append(fb, RSTRING_PTR(rString), RSTRING_LEN(rString));
@@ -110,17 +115,34 @@ static void write_binary(FBuffer *fb, VALUE rObject) {
   write_string(fb, rObject);
 }
 
-void write_bignum_guts(FBuffer *fb, VALUE rObject) {
+
+//
+// Bignums
+//
+
+// C transcription of Ruby implementation.  I didn't want to dig into the internal implementation
+// of Ruby's Bignum, but a much faster implementation could be written by converting the
+// immediate Bignum value to the BERT Bignum format
+// TODO: Invent faster algorithm for parsing Bignums
+
+static void write_bignum_guts(FBuffer *fb, VALUE rObject) {
+  // Ruby: write_1 (num >= 0 ? 0 : 1)
   write_1(fb, RTEST(rb_funcall(rObject, rb_intern(">="), 1, INT2FIX(0))) ? 0 : 1);
+  // Ruby: num = num.abs
   VALUE bigNum = rb_funcall(rObject, rb_intern("abs"), 0);
+  // Ruby: while(num != 0)
   while( !rb_funcall(bigNum, rb_intern("=="), 1, INT2FIX(0)) ) {
+    // Ruby: rem = num % 256
     short int rem = (short int) FIX2INT(rb_funcall(bigNum, rb_intern("%"), 1, INT2FIX(256)));
+    // Ruby: write_1 rem
     write_1(fb, rem);
+    // Ruby: num = num >> 8
     bigNum = rb_funcall(bigNum, rb_intern(">>"), 1, INT2FIX(8));
   }
 }
 
-void write_bignum(FBuffer *fb, VALUE rObject) {
+static void write_bignum(FBuffer *fb, VALUE rObject) {
+  // Ruby: n = (num.to_s(2).size / 8.0).ceil
   VALUE rStringRep = rb_funcall(rObject, rb_intern("to_s"), 1, INT2FIX(2));
   long bits = NUM2LONG(rb_funcall(rStringRep, rb_intern("size"), 0));
   int bytes = ceil(bits / 8.0);
@@ -136,6 +158,11 @@ void write_bignum(FBuffer *fb, VALUE rObject) {
   }
 }
 
+
+//
+// Integers
+//
+
 static void write_integer(FBuffer *fb, VALUE rObject) {
   long number = FIX2LONG(rObject);
 
@@ -149,6 +176,11 @@ static void write_integer(FBuffer *fb, VALUE rObject) {
     write_bignum(fb, rObject);
   }
 }
+
+
+//
+// Floats
+//
 
 static void write_float(FBuffer *fb, VALUE rObject) {
   write_1(fb, ERL_FLOAT);
@@ -175,6 +207,11 @@ static void write_float(FBuffer *fb, VALUE rObject) {
 
   fbuffer_append(fb, float_string, 31);
 }
+
+
+//
+// Arrays and Tuples
+//
 
 static void write_array(FBuffer *fb, VALUE rObject) {
   long length = RARRAY_LEN(rObject);
@@ -205,6 +242,7 @@ static void write_array(FBuffer *fb, VALUE rObject) {
 
   if(!tuple) write_1(fb, ERL_NIL);
 }
+
 
 static void write_any_raw(FBuffer *fb, VALUE rObject) {
   switch(TYPE(rObject)) {
