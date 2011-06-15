@@ -1,9 +1,13 @@
 #ifndef _ENCODE_H_
 #define _ENCODE_H_
 
-#include "ruby.h"
-#include "../bert.h"
 #include <math.h>
+
+#include "ruby.h"
+#include "st.h"
+#include "regex.h"
+
+#include "../bert.h"
 
 static VALUE mBERT;
 static VALUE cEncode;
@@ -53,7 +57,8 @@ static void write_array(FBuffer *fb, VALUE rObject);
 static void write_any_raw(FBuffer *fb, VALUE rObject);
 static void write_any(FBuffer *fb, VALUE rObject);
 
-static VALUE method_encode(VALUE klass, VALUE rString);
+static VALUE method_encode(VALUE klass, VALUE rObject);
+static VALUE method_encoder(VALUE klass, VALUE rObject);
 static VALUE method_impl(VALUE klass);
 
 #endif

@@ -14,13 +14,14 @@ rescue LoadError
   require 'bert/decode'
 end
 
+require 'bert/encoder'
+
 begin
   require 'bert/c/encode/encode'
 rescue LoadError
   require 'bert/encode'
 end
 
-require 'bert/encoder'
 require 'bert/decoder'
 
 # Global method for specifying that an array should be encoded as a tuple.
