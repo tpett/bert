@@ -97,7 +97,7 @@ static void fail(VALUE rObject) {
   rb_raise(
       rb_eStandardError,
       "BERT: Failed to encode object %s",
-      rb_funcall(rObject, rb_intern("inspect"), 0)
+      STR2CSTR(rb_funcall(rObject, rb_intern("inspect"), 0))
   );
 }
 
