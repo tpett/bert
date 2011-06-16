@@ -9,9 +9,13 @@
 
 #include "../bert.h"
 
+#define C2SYM(str) (ID2SYM(rb_intern(str)))
+
 static VALUE mBERT;
 static VALUE cEncode;
+static VALUE cEncoder;
 static VALUE cTuple;
+static ID convertID;
 
 // Initialization Method
 void Init_encode();
@@ -58,7 +62,9 @@ static void write_any_raw(FBuffer *fb, VALUE rObject);
 static void write_any(FBuffer *fb, VALUE rObject);
 
 static VALUE method_encode(VALUE klass, VALUE rObject);
-static VALUE method_encoder(VALUE klass, VALUE rObject);
 static VALUE method_impl(VALUE klass);
+
+static VALUE method_encoder_encode(VALUE klass, VALUE rObject);
+static VALUE method_encoder_base_convert(VALUE klass, VALUE rObject);
 
 #endif

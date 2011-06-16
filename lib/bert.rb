@@ -14,12 +14,12 @@ rescue LoadError
   require 'bert/decode'
 end
 
-require 'bert/encoder'
 
 begin
   require 'bert/c/encode/encode'
 rescue LoadError
   require 'bert/encode'
+  require 'bert/encoder'
 end
 
 require 'bert/decoder'

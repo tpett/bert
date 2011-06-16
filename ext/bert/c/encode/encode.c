@@ -295,25 +295,20 @@ static VALUE tuple_new(VALUE rArray) {
 }
 
 // Passed to st_foreach to handle Hashes
-static int collect_hash(st_data_t key, st_data_t val, VALUE *args) {
-  VALUE converted_key = method_encoder(args[0], (VALUE) key);
-  VALUE converted_val = method_encoder(args[0], (VALUE) val);
-  rb_ary_push(args[1], tuple_new(rb_ary_new3(2, converted_key, converted_val)) );
+static int collect_hash(st_data_t key, st_data_t val, VALUE rArray) {
+  VALUE converted_key = rb_funcall(cEncoder, convertID, 1, (VALUE) key);
+  VALUE converted_val = rb_funcall(cEncoder, convertID, 1, (VALUE) val);
+  rb_ary_push(rArray, tuple_new(rb_ary_new3(2, converted_key, converted_val)) );
   return ST_CONTINUE;
 }
 
-#define C2SYM(str) (ID2SYM(rb_intern(str)))
-
-static VALUE method_encoder(VALUE klass, VALUE rObject) {
+static VALUE method_encoder_base_convert(VALUE klass, VALUE rObject) {
   switch(TYPE(rObject)) {
     case T_HASH:
     {
-      VALUE args[2];
       VALUE pairs = rb_ary_new();
-      args[0] = klass;
-      args[1] = pairs;
 
-      st_foreach(RHASH_TBL(rObject), &collect_hash, (st_data_t)&args);
+      st_foreach(RHASH_TBL(rObject), &collect_hash, (st_data_t)pairs);
 
       return tuple_new(rb_ary_new3(3, ID2SYM(rb_intern("bert")), ID2SYM(rb_intern("dict")), pairs));
     }
@@ -322,16 +317,16 @@ static VALUE method_encoder(VALUE klass, VALUE rObject) {
       VALUE new_array = rb_funcall(rObject, rb_intern("clone"), 0);
       int i;
       for(i = 0; i < RARRAY(new_array)->len; i++) {
-        rb_ary_store(new_array, i, method_encoder(klass, rb_ary_entry(new_array, i)));
+        rb_ary_store(new_array, i, rb_funcall(klass, convertID, 1, rb_ary_entry(new_array, i)));
       }
       return new_array;
     }
     case T_NIL:
       return tuple_new(rb_ary_new3(2, C2SYM("bert"), C2SYM("nil")));
-    case T_FALSE:
-      return tuple_new(rb_ary_new3(2, C2SYM("bert"), C2SYM("false")));
     case T_TRUE:
       return tuple_new(rb_ary_new3(2, C2SYM("bert"), C2SYM("true")));
+    case T_FALSE:
+      return tuple_new(rb_ary_new3(2, C2SYM("bert"), C2SYM("false")));
     case T_REGEXP:
     {
       VALUE source = rb_str_new(RREGEXP(rObject)->str, RREGEXP(rObject)->len);
@@ -367,14 +362,20 @@ static VALUE method_encoder(VALUE klass, VALUE rObject) {
   }
 }
 
+static VALUE method_encoder_encode(VALUE klass, VALUE rObject) {
+  return method_encode(cEncode, rb_funcall(cEncoder, convertID, 1, rObject));
+}
+
 void Init_encode() {
   mBERT = rb_const_get(rb_cObject, rb_intern("BERT"));
-  cEncode = rb_define_class_under(mBERT, "Encode", rb_cObject);
   cTuple = rb_const_get(mBERT, rb_intern("Tuple"));
-  VALUE cEncoder = rb_const_get(mBERT, rb_intern("Encoder"));
+  convertID = rb_intern("convert");
 
+  cEncode = rb_define_class_under(mBERT, "Encode", rb_cObject);
   rb_define_singleton_method(cEncode, "encode", method_encode, 1);
   rb_define_singleton_method(cEncode, "impl", method_impl, 0);
 
-  rb_define_singleton_method(cEncoder, "convert", method_encoder, 1);
+  cEncoder = rb_define_class_under(mBERT, "Encoder", rb_cObject);
+  rb_define_singleton_method(cEncoder, "convert", method_encoder_base_convert, 1);
+  rb_define_singleton_method(cEncoder, "encode", method_encoder_encode, 1);
 }
