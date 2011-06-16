@@ -65,6 +65,6 @@ static VALUE method_encode(VALUE klass, VALUE rObject);
 static VALUE method_impl(VALUE klass);
 
 static VALUE method_encoder_encode(VALUE klass, VALUE rObject);
-static VALUE method_encoder_base_convert(VALUE klass, VALUE rObject);
+static VALUE method_encoder_convert(VALUE klass, VALUE rObject);
 
 #endif

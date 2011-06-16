@@ -59,8 +59,13 @@ static void fbuffer_append_number(FBuffer *fb, long number, short int length) {
   char *input = (char*) &number;
   int i;
 
+  // BERT is big-endian; do the conversion if necessary
   for(i = 0; i < length; i++) {
+#ifdef WORDS_BIGENDIAN
+    output[i] = *(input + i);
+#else
     output[i] = *(input + (length - 1 - i));
+#endif
   }
 
   fbuffer_append(fb, (char *) &output, length);
@@ -89,7 +94,11 @@ void p(VALUE val) {
 }
 
 static void fail(VALUE rObject) {
-  rb_raise(rb_eStandardError, "BERT: Failed to encode object");
+  rb_raise(
+      rb_eStandardError,
+      "BERT: Failed to encode object %s",
+      rb_funcall(rObject, rb_intern("inspect"), 0)
+  );
 }
 
 static void write_1(FBuffer *fb, unsigned char out) {
@@ -302,7 +311,7 @@ static int collect_hash(st_data_t key, st_data_t val, VALUE rArray) {
   return ST_CONTINUE;
 }
 
-static VALUE method_encoder_base_convert(VALUE klass, VALUE rObject) {
+static VALUE method_encoder_convert(VALUE klass, VALUE rObject) {
   switch(TYPE(rObject)) {
     case T_HASH:
     {
@@ -363,6 +372,7 @@ static VALUE method_encoder_base_convert(VALUE klass, VALUE rObject) {
 }
 
 static VALUE method_encoder_encode(VALUE klass, VALUE rObject) {
+  // Calling "convert" through Ruby so end-user can extend / alias chain for custom usage
   return method_encode(cEncode, rb_funcall(cEncoder, convertID, 1, rObject));
 }
 
@@ -376,6 +386,7 @@ void Init_encode() {
   rb_define_singleton_method(cEncode, "impl", method_impl, 0);
 
   cEncoder = rb_define_class_under(mBERT, "Encoder", rb_cObject);
-  rb_define_singleton_method(cEncoder, "convert", method_encoder_base_convert, 1);
+  rb_define_singleton_method(cEncoder, "convert", method_encoder_convert, 1);
   rb_define_singleton_method(cEncoder, "encode", method_encoder_encode, 1);
 }
+
